@@ -3,10 +3,14 @@
 macOS MenuBar app + CLI that restores the display arrangement for the
 USB-C port the external monitor is plugged into.
 
-Workflow: plug in → arrange displays in System Settings → save with
-`de-monitor --remember` (or "Remember current" in the menu) → the app
-restores that arrangement every time the same port is used. Ports
-without a saved setup are left untouched.
+No manual actions: everything is managed via System Settings → Arrange
+Displays; the app only remembers the last arrangement per port:
+- display **added** (or launch/wake) → restore the saved setup for that
+  port, or snapshot the current arrangement as the initial one;
+- display **moved** by the user → snapshot the new arrangement;
+- moves within 5s after the app's own apply are ignored (echo, not user).
+Every save/apply/skip is logged (Console). `de-monitor --remember`
+stays as an emergency manual snapshot.
 
 ## Detection signal (proven by A-B-A replug test)
 
@@ -75,9 +79,9 @@ xcrun swift run de-monitor-app
 
 `CGDisplayRegisterReconfigurationCallback` → ~2s debounce (link training)
 → detect → restore saved setup, plus a wake-from-sleep trigger. Menu shows
-`<name> (PortID <id> · <address>)`, "remember current", login-item toggle
-(`SMAppService`), quit. Manual restore stays available via
-`de-monitor --apply`. For `Start at login`
+`<name> (PortID <id> · <address>)` plus a compact saved-state line,
+login-item toggle (`SMAppService`), quit. Manual restore/snapshot via
+`de-monitor --apply` / `--remember`. For `Start at login`
 to work the binary must be bundled as a `.app` (packaging TBD).
 
 ## Files
