@@ -5,22 +5,15 @@ func printUsage() {
     print("""
     de-monitor — USB-C port display switcher
     Usage:
-      de-monitor --detect              print (PortID, Address) -> port
-      de-monitor --status               detect + current layout + configured profiles
-      de-monitor --apply [left|right] [--force]  apply layout (default: auto by port; skips if already active)
-      de-monitor --remember [left|right] save current internal origin as that port's layout
+      de-monitor --detect              print PortID/Address/product/port key
+      de-monitor --status               detect + current layout + saved setups
+      de-monitor --apply [port-key] [--force]  restore setup (default: current port)
+      de-monitor --remember             save current arrangement for the current port
       de-monitor --list                 show current display origins
     """)
 }
 
 let args = CommandLine.arguments.dropFirst()
-
-func describe(_ profile: DisplayProfile?) -> String {
-    guard let profile else {
-        return "not configured (arrange in Settings, then --remember)"
-    }
-    return "internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) \(profile.note)"
-}
 
 guard let cmd = args.first else {
     printUsage()
@@ -29,49 +22,55 @@ guard let cmd = args.first else {
 
 switch cmd {
 case "--detect":
-    let (signal, port) = Detector.classified()
+    let signal = Detector.detect()
     print("PortID: \(signal.portID.map(String.init) ?? "nil")")
     print("Address: \(signal.address ?? "nil")")
     print("Product: \(signal.productName ?? "nil")")
-    print("Port: \(port.rawValue) (\(port.displayName))")
+    print("Key: \(signal.hasIdentity ? signal.key : "(no port)")")
 
 case "--status":
-    let (signal, port) = Detector.classified()
-    print("PortID: \(signal.portID.map(String.init) ?? "nil")  Address: \(signal.address ?? "nil")  -> \(port.rawValue)")
+    let signal = Detector.detect()
+    print("PortID: \(signal.portID.map(String.init) ?? "nil")  Address: \(signal.address ?? "nil")")
     print("--- current ---")
     print(LayoutApplier.describeCurrent())
-    let stored = ProfileStore.load()
-    print("--- profiles (\(ProfileStore.configURL.path)) ---")
-    print("left:  \(describe(stored.layouts.left))")
-    print("right: \(describe(stored.layouts.right))")
+    let setups = ProfileStore.load()
+    print("--- saved setups (\(ProfileStore.configURL.path)) ---")
+    if setups.isEmpty {
+        print("none saved yet (arrange in Settings, then --remember)")
+    } else {
+        for key in setups.keys.sorted() {
+            let p = setups[key]!
+            print("\(key): internal (\(p.internalOrigin.x),\(p.internalOrigin.y))")
+        }
+    }
 
 case "--list":
     print(LayoutApplier.describeCurrent())
 
 case "--apply":
-    let stored = ProfileStore.load()
+    let setups = ProfileStore.load()
     let rest = Array(args.dropFirst())
     let force = rest.contains("--force")
-    let port: PhysicalPort
-    if let name = rest.first(where: { $0 != "--force" }), let p = PhysicalPort(rawValue: name) {
-        port = p
+    let key: String
+    if let explicit = rest.first(where: { $0 != "--force" }) {
+        key = explicit
     } else {
-        port = Detector.classified().port
-    }
-    let profile = stored.layouts.profile(for: port)
-    guard let profile else {
-        if port == .unknown {
-            print("Unknown port; specify explicitly: --apply [left|right]")
-        } else {
-            print("No saved layout for \(port.rawValue) yet — arrange displays in System Settings, then `de-monitor --remember \(port.rawValue)`")
+        let signal = Detector.detect()
+        guard signal.hasIdentity else {
+            print("No external display detected.")
+            exit(1)
         }
+        key = signal.key
+    }
+    guard let profile = setups[key] else {
+        print("No saved setup for \(key) — arrange displays in System Settings, then `de-monitor --remember`")
         exit(1)
     }
     if !force && LayoutApplier.matches(profile) {
-        print("\(port.rawValue) layout already active: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) — skipping (use --force to re-apply)")
+        print("\(key) already active: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) — skipping (use --force to re-apply)")
         break
     }
-    print("Applying \(port.rawValue) layout: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) ...")
+    print("Applying \(key): internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) ...")
     if LayoutApplier.apply(profile) {
         print("OK")
     } else {
@@ -80,30 +79,20 @@ case "--apply":
     }
 
 case "--remember":
-    var stored = ProfileStore.load()
-    let port: PhysicalPort
-    if let name = args.dropFirst().first, let p = PhysicalPort(rawValue: name), p != .unknown {
-        port = p
-    } else {
-        port = Detector.classified().port
-        if port == .unknown {
-            print("Cannot determine port; specify: --remember [left|right]")
-            exit(1)
-        }
+    let signal = Detector.detect()
+    guard signal.hasIdentity else {
+        print("No external display detected.")
+        exit(1)
     }
     guard let origin = LayoutApplier.currentOrigins().internalOrigin else {
         print("No internal display found.")
         exit(1)
     }
-    let profile = DisplayProfile(internalOrigin: origin, note: "remembered \(Date())")
-    switch port {
-    case .left: stored.layouts.left = profile
-    case .right: stored.layouts.right = profile
-    case .unknown: break
-    }
+    var setups = ProfileStore.load()
+    setups[signal.key] = DisplayProfile(internalOrigin: origin)
     do {
-        try ProfileStore.save(stored)
-        print("Remembered \(port.rawValue): internal (\(Int(origin.x)),\(Int(origin.y)))")
+        try ProfileStore.save(setups)
+        print("Remembered \(signal.key): internal (\(Int(origin.x)),\(Int(origin.y)))")
     } catch {
         print("Save failed: \(error)")
         exit(1)

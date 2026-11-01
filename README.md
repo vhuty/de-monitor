@@ -1,23 +1,29 @@
 # de-monitor
 
-macOS MenuBar app + CLI that auto-switches display arrangement based on which
-USB-C port the external monitor is plugged into (MacBook Pro M4).
+macOS MenuBar app + CLI that restores the display arrangement for the
+USB-C port the external monitor is plugged into.
 
-Workflow: arrange displays in System Settings → save with
-`de-monitor --remember [left|right]` (or "Remember current" in the menu)
-→ the app restores the saved arrangement whenever that port is used.
-No built-in geometry: a port without a saved layout is left untouched.
+Workflow: plug in → arrange displays in System Settings → save with
+`de-monitor --remember` (or "Remember current" in the menu) → the app
+restores that arrangement every time the same port is used. Ports
+without a saved setup are left untouched.
 
 ## Detection signal (proven by A-B-A replug test)
 
-| Port | `PortID` (`IOMobileFramebufferShim.DisplayAttributes`) | `Address` (`AppleDisplayConnectionManager.ConnectionMapping`) |
-|---|---|---|
-| Left #1 | 0 | 0.0.0 |
-| Left #2 | 16 | 0.1.0 |
-| Right | 32 | 0.2.0 |
+Each socket reports stable IOKit facts: `PortID`
+(`IOMobileFramebufferShim.DisplayAttributes`) and `Address`
+(`AppleDisplayConnectionManager.ConnectionMapping`). Observed on this
+hardware:
 
-Pattern: `Address = 0.{N}.0`, `PortID = 16×N`. Unknown values → graceful
-fallback (no auto-apply) + manual mode via menu / `--apply`.
+| PortID | Address |
+|---|---|
+| 0 | 0.0.0 |
+| 16 | 0.1.0 |
+| 32 | 0.2.0 |
+
+The pair is used as-is (e.g. `32/0.2.0`) to key saved setups — no
+interpretation of which physical socket it "should" be. No identifiable
+port, or no saved setup for it → nothing is auto-applied.
 
 Implementation note: the plan originally suggested `CGDisplayIOServicePort`
 → parent shim, but that API is marked unavailable in the macOS SDK, so
@@ -47,15 +53,19 @@ Needs `/opt/homebrew/bin/displayplacer` only for manual inspection
 ## CLI
 
 ```sh
-xcrun swift run de-monitor --detect    # (PortID, Address) -> port
-xcrun swift run de-monitor --status    # detect + current layout + profiles
-xcrun swift run de-monitor --apply [left|right] [--force]  # default: auto by port; skips if already active or unsaved
-xcrun swift run de-monitor --remember [left|right] # save current arrangement for the port
+xcrun swift run de-monitor --detect    # PortID/Address/product/port key
+xcrun swift run de-monitor --status    # detect + current layout + saved setups
+xcrun swift run de-monitor --apply [port-key] [--force]  # default: current port; skips if already active or unsaved
+xcrun swift run de-monitor --remember  # save current arrangement for the current port
 xcrun swift run de-monitor --list      # current display origins
 ```
 
-Profiles live in `~/.config/de-monitor/profiles.json` (created on first
-`--remember`/menu use; missing file → nothing configured).
+`~/.config/de-monitor/profiles.json` maps port key to arrangement —
+nothing else:
+
+```json
+{"32/0.2.0": {"internalOrigin": {"x": -1512, "y": 278}}}
+```
 
 ## MenuBar app
 
@@ -64,15 +74,15 @@ xcrun swift run de-monitor-app
 ```
 
 `CGDisplayRegisterReconfigurationCallback` → ~2s debounce (link training)
-→ detect → apply, plus a wake-from-sleep trigger. Menu shows detected
-port + signal, "remember current", login-item
-toggle (`SMAppService`), quit. Manual apply stays available via
-`de-monitor --apply`. For `Start at login` to work the binary
-must be bundled as a `.app` (packaging TBD).
+→ detect → restore saved setup, plus a wake-from-sleep trigger. Menu shows
+factual port info (`PortID · Address · product`), this-port saved state,
+"remember current", login-item toggle (`SMAppService`), quit. Manual
+restore stays available via `de-monitor --apply`. For `Start at login`
+to work the binary must be bundled as a `.app` (packaging TBD).
 
 ## Files
 
-- `Sources/DisplaySwitcherCore/` — `PortIdentity` (classify),
+- `Sources/DisplaySwitcherCore/` — `PortSignal` (opaque identity),
   `Detector` (IOKit), `Layouts` (profiles), `ProfileStore` (JSON),
   `LayoutApplier` (CoreGraphics)
 - `Sources/DEMonitorCLI/` — CLI
@@ -81,6 +91,6 @@ must be bundled as a `.app` (packaging TBD).
 
 ## Risks (per plan)
 
-- Undocumented IOKit fields may change in future macOS → fallback + manual mode.
+- Undocumented IOKit fields may change in future macOS → setups keyed by
+  old values stop matching (re-run `--remember`); unknown ports are skipped.
 - Sleep/wake path untested → debounce + wake trigger (verify on hardware).
-- Left ports measured once each → re-run `--detect` on each left port to confirm.

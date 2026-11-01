@@ -1,34 +1,25 @@
 import Foundation
 
 public enum ProfileStore {
-    public struct Stored: Codable, Sendable {
-        public var layouts: PortLayouts
-        public init(layouts: PortLayouts = PortLayouts()) {
-            self.layouts = layouts
-        }
-    }
-
     public static var configURL: URL {
         let base = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".config/de-monitor", isDirectory: true)
         return base.appendingPathComponent("profiles.json")
     }
 
-    public static func load() -> Stored {
-        let url = configURL
-        guard let data = try? Data(contentsOf: url),
-              let stored = try? JSONDecoder().decode(Stored.self, from: data) else {
-            return Stored()
+    public static func load() -> [String: DisplayProfile] {
+        guard let data = try? Data(contentsOf: configURL),
+              let setups = try? JSONDecoder().decode([String: DisplayProfile].self, from: data) else {
+            return [:]
         }
-        return stored
+        return setups
     }
 
-    public static func save(_ stored: Stored) throws {
-        let url = configURL
+    public static func save(_ setups: [String: DisplayProfile]) throws {
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
+            at: configURL.deletingLastPathComponent(),
             withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(stored)
-        try data.write(to: url, options: .atomic)
+        let data = try JSONEncoder().encode(setups)
+        try data.write(to: configURL, options: .atomic)
     }
 }

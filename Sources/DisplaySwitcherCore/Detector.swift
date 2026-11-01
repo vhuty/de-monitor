@@ -48,11 +48,6 @@ public enum Detector {
         detectAll().first ?? PortSignal()
     }
 
-    public static func classified() -> (signal: PortSignal, port: PhysicalPort) {
-        let s = detect()
-        return (s, classifyPort(signal: s))
-    }
-
     // MARK: - Shim enumeration
 
     static func findExternalShims() -> [ShimInfo] {

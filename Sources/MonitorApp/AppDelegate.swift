@@ -4,7 +4,7 @@ import DisplaySwitcherCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var debounceTimer: Timer?
-    private var lastApplied: PhysicalPort?
+    private var lastAppliedKey: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = icon
             button.toolTip = "de-monitor: USB-C display switcher"
         }
-        rebuildMenu(port: .unknown, signal: PortSignal())
+        rebuildMenu(signal: PortSignal(), saved: nil)
 
         // Debounce covers link training after replug.
         CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
@@ -44,71 +44,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func detectAndApply(reason: String) {
-        let (signal, port) = Detector.classified()
-        rebuildMenu(port: port, signal: signal)
-        guard port != .unknown else {
-            NSLog("de-monitor: unknown port (PortID=%@ Address=%@), skipping auto-apply",
-                  String(describing: signal.portID), signal.address ?? "nil")
+        let signal = Detector.detect()
+        let key = signal.key
+        let setups = ProfileStore.load()
+        let saved = key.isEmpty ? nil : setups[key]
+        rebuildMenu(signal: signal, saved: saved)
+        guard signal.hasIdentity else {
+            NSLog("de-monitor: no external display, skipping auto-apply")
             return
         }
-        if port == lastApplied && reason == "reconfig" {
+        if key == lastAppliedKey && reason == "reconfig" {
             return
         }
-        guard let profile = ProfileStore.load().layouts.profile(for: port) else {
-            NSLog("de-monitor: no saved layout for %@, skipping (arrange + Remember current)", port.rawValue)
-            rebuildMenu(port: port, signal: signal)
+        guard let profile = saved else {
+            NSLog("de-monitor: no saved setup for port %@, skipping (arrange + Remember current)", key)
             return
         }
         if LayoutApplier.matches(profile) {
-            lastApplied = port
-            NSLog("de-monitor: %@ layout already active, skipping reconfig", port.rawValue)
-            rebuildMenu(port: port, signal: signal)
+            lastAppliedKey = key
+            NSLog("de-monitor: setup for %@ already active, skipping reconfig", key)
             return
         }
         if LayoutApplier.apply(profile) {
-            lastApplied = port
-            NSLog("de-monitor: applied %@ layout for %@ (%@)", port.rawValue,
-                  signal.productName ?? "?", reason)
+            lastAppliedKey = key
+            NSLog("de-monitor: applied saved setup for %@ (%@)", key, reason)
         } else {
             NSLog("de-monitor: apply failed (single display?)")
         }
-        rebuildMenu(port: port, signal: signal)
+        rebuildMenu(signal: signal, saved: saved)
     }
 
     // MARK: - Menu
 
-    private func savedState(_ profile: DisplayProfile?) -> String {
-        guard let profile else { return "—" }
-        return "(\(profile.internalOrigin.x),\(profile.internalOrigin.y))"
-    }
-
-    private func rebuildMenu(port: PhysicalPort, signal: PortSignal) {
+    private func rebuildMenu(signal: PortSignal, saved: DisplayProfile?) {
         let menu = NSMenu()
-        let statusTitle = port == .unknown
-            ? "Port: unknown (no/undetected external)"
-            : "Port: \(port.rawValue) — \(port.displayName)"
-        let status = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        menu.addItem(status)
 
-        let detail = NSMenuItem(
-            title: "PortID \(signal.portID.map(String.init) ?? "-") · \(signal.address ?? "-")",
-            action: nil, keyEquivalent: "")
-        detail.isEnabled = false
-        menu.addItem(detail)
+        let signalTitle: String
+        if signal.hasIdentity {
+            var parts = ["PortID \(signal.portID.map(String.init) ?? "-")", signal.address ?? "-"]
+            if let product = signal.productName {
+                parts.append(product)
+            }
+            signalTitle = parts.joined(separator: " · ")
+        } else {
+            signalTitle = "No external display"
+        }
+        let signalItem = NSMenuItem(title: signalTitle, action: nil, keyEquivalent: "")
+        signalItem.isEnabled = false
+        menu.addItem(signalItem)
 
-        let stored = ProfileStore.load()
-        let layoutsState = NSMenuItem(
-            title: "Saved: left \(savedState(stored.layouts.left)) · right \(savedState(stored.layouts.right))",
-            action: nil, keyEquivalent: "")
-        layoutsState.isEnabled = false
-        menu.addItem(layoutsState)
+        let savedTitle: String
+        if let saved {
+            savedTitle = "This port: saved (\(saved.internalOrigin.x),\(saved.internalOrigin.y))"
+        } else if signal.hasIdentity {
+            savedTitle = "This port: not saved yet"
+        } else {
+            savedTitle = "This port: —"
+        }
+        let savedItem = NSMenuItem(title: savedTitle, action: nil, keyEquivalent: "")
+        savedItem.isEnabled = false
+        menu.addItem(savedItem)
         menu.addItem(.separator())
 
         let remember = NSMenuItem(title: "Remember current for this port…",
                                   action: #selector(rememberCurrent), keyEquivalent: "")
         remember.target = self
-        remember.isEnabled = (port != .unknown)
+        remember.isEnabled = signal.hasIdentity
         menu.addItem(remember)
 
         let autostart = NSMenuItem(title: "Start at login: \(Autostart.isEnabled ? "on" : "off")",
@@ -124,14 +125,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func rememberCurrent() {
-        let (signal, port) = Detector.classified()
-        guard port != .unknown else { return }
+        let signal = Detector.detect()
+        guard signal.hasIdentity else { return }
         guard let origin = LayoutApplier.currentOrigins().internalOrigin else { return }
-        var stored = ProfileStore.load()
-        let profile = DisplayProfile(internalOrigin: origin, note: "remembered via menu \(Date())")
-        if port == .left { stored.layouts.left = profile } else { stored.layouts.right = profile }
-        try? ProfileStore.save(stored)
-        rebuildMenu(port: port, signal: signal)
+        var setups = ProfileStore.load()
+        setups[signal.key] = DisplayProfile(internalOrigin: origin)
+        try? ProfileStore.save(setups)
+        lastAppliedKey = signal.key
+        rebuildMenu(signal: signal, saved: setups[signal.key])
     }
 
     @objc private func toggleAutostart() {
@@ -140,8 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("de-monitor: autostart toggle failed: \(error)")
         }
-        let (signal, port) = Detector.classified()
-        rebuildMenu(port: port, signal: signal)
+        let signal = Detector.detect()
+        rebuildMenu(signal: signal, saved: ProfileStore.load()[signal.key])
     }
 }
 
