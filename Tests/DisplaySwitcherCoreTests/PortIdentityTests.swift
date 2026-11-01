@@ -34,4 +34,21 @@ struct PortIdentityTests {
         #expect(layouts.profile(for: .left).internalOrigin.x == 524)
         #expect(layouts.profile(for: .unknown) == layouts.right)
     }
+
+    @Test("matches() reflects the live arrangement")
+    func matchesLiveArrangement() {
+        // Runs against the real displays: must not crash and must agree
+        // with currentOrigins().
+        let stored = ProfileStore.load()
+        let origins = LayoutApplier.currentOrigins()
+        let rightMatches = LayoutApplier.matches(stored.layouts.right)
+        if let io = origins.internalOrigin, let eo = origins.external {
+            let expected = Int(eo.x) == 0 && Int(eo.y) == 0
+                && Int(io.x) == stored.layouts.right.internalOrigin.x
+                && Int(io.y) == stored.layouts.right.internalOrigin.y
+            #expect(rightMatches == expected)
+        } else {
+            #expect(rightMatches == false)
+        }
+    }
 }

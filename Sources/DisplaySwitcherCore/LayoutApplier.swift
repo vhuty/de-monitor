@@ -30,6 +30,23 @@ public enum LayoutApplier {
         return (internalOrigin, externalOrigin)
     }
 
+    /// True when both displays already sit at the profile's origins
+    /// (external at (0,0) = main, internal at the profile origin).
+    /// Lets callers skip a redundant reconfiguration (which always
+    /// flickers: system fade + monitor resync).
+    public static func matches(_ profile: DisplayProfile) -> Bool {
+        let displays = activeDisplays()
+        guard let internalDisplay = displays.first(where: { $0.isBuiltin }),
+              let externalDisplay = displays.first(where: { !$0.isBuiltin }) else {
+            return false
+        }
+        let io = internalDisplay.bounds.origin
+        let eo = externalDisplay.bounds.origin
+        return Int(eo.x) == 0 && Int(eo.y) == 0
+            && Int(io.x) == profile.internalOrigin.x
+            && Int(io.y) == profile.internalOrigin.y
+    }
+
     @discardableResult
     public static func apply(_ profile: DisplayProfile) -> Bool {
         let displays = activeDisplays()

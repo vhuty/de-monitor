@@ -61,6 +61,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let profile = ProfileStore.load().layouts.profile(for: port)
+        if LayoutApplier.matches(profile) {
+            lastApplied = port
+            NSLog("de-monitor: %@ layout already active, skipping reconfig", port.rawValue)
+            rebuildMenu(port: port, signal: signal)
+            return
+        }
         if LayoutApplier.apply(profile) {
             lastApplied = port
             NSLog("de-monitor: applied %@ layout for %@ (%@)", port.rawValue,

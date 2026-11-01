@@ -7,7 +7,7 @@ func printUsage() {
     Usage:
       de-monitor --detect              print (PortID, Address) -> port
       de-monitor --status               detect + current layout + configured profiles
-      de-monitor --apply [left|right]   apply layout (default: auto by port)
+      de-monitor --apply [left|right] [--force]  apply layout (default: auto by port; skips if already active)
       de-monitor --remember [left|right] save current internal origin as that port's layout
       de-monitor --list                 show current display origins
     """)
@@ -43,13 +43,19 @@ case "--list":
 
 case "--apply":
     let stored = ProfileStore.load()
+    let rest = Array(args.dropFirst())
+    let force = rest.contains("--force")
     let port: PhysicalPort
-    if let name = args.dropFirst().first, let p = PhysicalPort(rawValue: name) {
+    if let name = rest.first(where: { $0 != "--force" }), let p = PhysicalPort(rawValue: name) {
         port = p
     } else {
         port = Detector.classified().port
     }
     let profile = stored.layouts.profile(for: port)
+    if !force && LayoutApplier.matches(profile) {
+        print("\(port.rawValue) layout already active: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) — skipping (use --force to re-apply)")
+        break
+    }
     print("Applying \(port.rawValue) layout: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) ...")
     if LayoutApplier.apply(profile) {
         print("OK")
