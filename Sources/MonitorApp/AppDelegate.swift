@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
             if flags.contains(.beginConfigurationFlag) { return }
             DispatchQueue.main.async {
-                MonitorApp.shared?.scheduleSwitch(reason: "reconfig", flags: flags)
+                MonitorApp.shared?.scheduleSwitch(flags: flags)
             }
         }, nil)
 
@@ -34,22 +34,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(onWake),
             name: NSWorkspace.didWakeNotification, object: nil)
 
-        scheduleSwitch(reason: "launch")
+        scheduleSwitch()
     }
 
     @objc private func onWake() {
-        scheduleSwitch(reason: "wake")
+        scheduleSwitch()
     }
 
-    func scheduleSwitch(reason: String, flags: CGDisplayChangeSummaryFlags = []) {
+    func scheduleSwitch(flags: CGDisplayChangeSummaryFlags = []) {
         pendingFlags.formUnion(flags)
         debounceTimer?.invalidate()
         debounceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            self?.detectAndApply(reason: reason)
+            self?.detectAndApply()
         }
     }
 
-    private func detectAndApply(reason: String) {
+    private func detectAndApply() {
         let flags = pendingFlags
         pendingFlags = []
         let signal = Detector.detect()
@@ -64,13 +64,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             restoreOrInit(signal: signal, key: key, flags: flags)
         } else if moved {
             snapshotWhenSettled(signal: signal, key: key)
-        } else if let profile = ProfileStore.load()[key], LayoutApplier.matches(profile) {
-            NSLog("de-monitor: setup for %@ already active", key)
+        } else if let profile = ProfileStore.load()[key] {
+            if LayoutApplier.matches(profile) {
+                NSLog("de-monitor: setup for %@ already active", key)
+            } else {
+                // No port change (launch/wake/mode change): a mismatch here may be
+                // a deliberate user state, so never yank it back. Restoring happens
+                // on Add only; a user arrange will snapshot via a Moved event.
+                NSLog("de-monitor: arrangement differs from saved for %@, leaving untouched (no port change)", key)
+            }
         } else {
-            // No port change (launch/wake/mode change): a mismatch here may be
-            // a deliberate user state, so never yank it back. Restoring happens
-            // on Add only; a user arrange will snapshot via a Moved event.
-            NSLog("de-monitor: arrangement differs from saved for %@, leaving untouched (no port change)", key)
+            NSLog("de-monitor: no saved setup for %@ yet (arrange in Settings to create one)", key)
         }
     }
 
@@ -79,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Adopt the user's arrangement only if one is already happening
             // in this window; never persist a system default as a setup.
             if flags.contains(.movedFlag) || flags.contains(.desktopShapeChangedFlag) {
-                snapshotCurrent(signal: signal, key: key)
+                snapshotWhenSettled(signal: signal, key: key)
             } else {
                 NSLog("de-monitor: no saved setup for %@, doing nothing (arrange in Settings to create one)", key)
             }
@@ -98,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu(signal: signal)
     }
 
-    private func snapshotWhenSettled(signal: PortSignal, key: String) {
+    private func snapshotWhenSettled(signal: PortSignal, key: String, attempts: Int = 3) {
         // Moves right after our own apply are its echo, not the user.
         if Date() < cooldownUntil {
             NSLog("de-monitor: ignoring move during post-apply cooldown")
@@ -116,16 +120,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settleTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
             guard let self else { return }
             if Date() < self.cooldownUntil {
-                NSLog("de-monitor: ignoring settled snapshot during post-apply cooldown")
+                // Our own apply landed mid-settle: retry after the cooldown
+                // instead of dropping a possible user adjustment.
+                if attempts > 1 {
+                    let delay = self.cooldownUntil.timeIntervalSinceNow + 0.5
+                    NSLog("de-monitor: settled snapshot in cooldown, retrying in %.1fs", delay)
+                    self.settleTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                        self?.snapshotWhenSettled(signal: signal, key: key, attempts: attempts - 1)
+                    }
+                } else {
+                    NSLog("de-monitor: ignoring settled snapshot during post-apply cooldown")
+                }
+                return
+            }
+            // The port may have changed mid-settle: never file current
+            // origins under a stale key.
+            let fresh = Detector.detect()
+            guard fresh.hasIdentity, fresh.key == key else {
+                NSLog("de-monitor: port changed or display removed during settle, dropping snapshot")
                 return
             }
             let second = LayoutApplier.currentOrigins()
-            guard let first, let current = second.internalOrigin,
-                  second.external != nil, current == first else {
-                NSLog("de-monitor: arrangement still changing, snapshot deferred")
+            guard let first, let current = second.internalOrigin, second.external != nil,
+                  Int(current.x) == Int(first.x), Int(current.y) == Int(first.y) else {
+                if attempts > 1 {
+                    NSLog("de-monitor: arrangement still changing, retrying settle check")
+                    self.snapshotWhenSettled(signal: fresh, key: key, attempts: attempts - 1)
+                } else {
+                    NSLog("de-monitor: arrangement still changing, snapshot deferred")
+                }
                 return
             }
-            self.snapshotCurrent(signal: signal, key: key)
+            self.snapshotCurrent(signal: fresh, key: key)
         }
     }
 
