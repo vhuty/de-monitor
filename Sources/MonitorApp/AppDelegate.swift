@@ -203,6 +203,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(state)
         menu.addItem(.separator())
 
+        let arrange = NSMenuItem(title: "Arrange Displays…",
+                                 action: #selector(openArrangeDisplays), keyEquivalent: "")
+        arrange.target = self
+        menu.addItem(arrange)
+
         let autostart = NSMenuItem(title: "Start at login: \(Autostart.isEnabled ? "on" : "off")",
                                    action: #selector(toggleAutostart), keyEquivalent: "")
         autostart.target = self
@@ -213,6 +218,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
 
         statusItem.menu = menu
+    }
+
+    @objc private func openArrangeDisplays() {
+        // Deep link into System Settings → Displays; there is no public
+        // anchor for the arrange canvas itself, this is as close as it gets.
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Displays-Settings.extension") else { return }
+        NSWorkspace.shared.open(url, configuration: .init()) { _, error in
+            if let error {
+                NSLog("de-monitor: could not open Displays settings: %@", String(describing: error))
+            }
+        }
     }
 
     @objc private func toggleAutostart() {
