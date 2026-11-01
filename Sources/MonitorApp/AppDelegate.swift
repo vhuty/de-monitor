@@ -1,8 +1,8 @@
 import AppKit
 import DisplaySwitcherCore
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem!
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {    private var statusItem: NSStatusItem!
     private var debounceTimer: Timer?
     private var pendingFlags: CGDisplayChangeSummaryFlags = []
     private var cooldownUntil = Date.distantPast
@@ -47,7 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pendingFlags.formUnion(flags)
         debounceTimer?.invalidate()
         debounceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            self?.detectAndApply()
+            // Timer blocks are nonisolated; hop onto the actor. The timer
+            // fires on the main runloop, so this costs nothing in practice.
+            Task { @MainActor in self?.detectAndApply() }
         }
     }
 
@@ -112,12 +114,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let delay = max(0, 16 - Date().timeIntervalSince(launchedAt))
         initialSnapshotTimer?.invalidate()
         initialSnapshotTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            let signal = Detector.detect()
-            guard signal.hasIdentity else { return }
-            guard ProfileStore.load()[signal.key] == nil else { return }
-            NSLog("de-monitor: no saved setup for %@, adopting current arrangement", signal.key)
-            self.snapshotWhenSettled(signal: signal, key: signal.key)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let signal = Detector.detect()
+                guard signal.hasIdentity else { return }
+                guard ProfileStore.load()[signal.key] == nil else { return }
+                NSLog("de-monitor: no saved setup for %@, adopting current arrangement", signal.key)
+                self.snapshotWhenSettled(signal: signal, key: signal.key)
+            }
         }
     }
 
@@ -137,40 +141,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settleTimer?.invalidate()
         let first = LayoutApplier.currentOrigins().internalOrigin
         settleTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            if Date() < self.cooldownUntil {
-                // Our own apply landed mid-settle: retry after the cooldown
-                // instead of dropping a possible user adjustment.
-                if attempts > 1 {
-                    let delay = self.cooldownUntil.timeIntervalSinceNow + 0.5
-                    NSLog("de-monitor: settled snapshot in cooldown, retrying in %.1fs", delay)
-                    self.settleTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                        self?.snapshotWhenSettled(signal: signal, key: key, attempts: attempts - 1)
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if Date() < self.cooldownUntil {
+                    // Our own apply landed mid-settle: retry after the cooldown
+                    // instead of dropping a possible user adjustment.
+                    if attempts > 1 {
+                        let delay = self.cooldownUntil.timeIntervalSinceNow + 0.5
+                        NSLog("de-monitor: settled snapshot in cooldown, retrying in %.1fs", delay)
+                        self.settleTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                            Task { @MainActor in self?.snapshotWhenSettled(signal: signal, key: key, attempts: attempts - 1) }
+                        }
+                    } else {
+                        NSLog("de-monitor: ignoring settled snapshot during post-apply cooldown")
                     }
-                } else {
-                    NSLog("de-monitor: ignoring settled snapshot during post-apply cooldown")
+                    return
                 }
-                return
-            }
-            // The port may have changed mid-settle: never file current
-            // origins under a stale key.
-            let fresh = Detector.detect()
-            guard fresh.hasIdentity, fresh.key == key else {
-                NSLog("de-monitor: port changed or display removed during settle, dropping snapshot")
-                return
-            }
-            let second = LayoutApplier.currentOrigins()
-            guard let first, let current = second.internalOrigin, second.external != nil,
-                  Int(current.x) == Int(first.x), Int(current.y) == Int(first.y) else {
-                if attempts > 1 {
-                    NSLog("de-monitor: arrangement still changing, retrying settle check")
-                    self.snapshotWhenSettled(signal: fresh, key: key, attempts: attempts - 1)
-                } else {
-                    NSLog("de-monitor: arrangement still changing, snapshot deferred")
+                // The port may have changed mid-settle: never file current
+                // origins under a stale key.
+                let fresh = Detector.detect()
+                guard fresh.hasIdentity, fresh.key == key else {
+                    NSLog("de-monitor: port changed or display removed during settle, dropping snapshot")
+                    return
                 }
-                return
+                let second = LayoutApplier.currentOrigins()
+                guard let first, let current = second.internalOrigin, second.external != nil,
+                      Int(current.x) == Int(first.x), Int(current.y) == Int(first.y) else {
+                    if attempts > 1 {
+                        NSLog("de-monitor: arrangement still changing, retrying settle check")
+                        self.snapshotWhenSettled(signal: fresh, key: key, attempts: attempts - 1)
+                    } else {
+                        NSLog("de-monitor: arrangement still changing, snapshot deferred")
+                    }
+                    return
+                }
+                self.snapshotCurrent(signal: fresh, key: key)
             }
-            self.snapshotCurrent(signal: fresh, key: key)
         }
     }
 
