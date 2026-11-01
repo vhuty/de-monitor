@@ -4,11 +4,13 @@ import DisplaySwitcherCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var debounceTimer: Timer?
-    private var lastAppliedKey: String?
     private var pendingFlags: CGDisplayChangeSummaryFlags = []
     private var cooldownUntil = Date.distantPast
+    private var launchedAt = Date()
+    private var settleTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        launchedAt = Date()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             // Emoji has no menu-bar glyph (renders as "?"); use an SF Symbol.
@@ -57,29 +59,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("de-monitor: no external display, skipping")
             return
         }
-        // Add (or launch/wake): port context may have changed -> restore
-        // saved setup, or snapshot current as the initial one.
-        // Moved/shape-changed: user rearranged in Settings -> snapshot.
-        if flags.contains(.addFlag) || reason == "launch" || reason == "wake" {
-            restoreOrInit(signal: signal, key: key)
+        let moved = flags.contains(.movedFlag) || flags.contains(.desktopShapeChangedFlag)
+        if flags.contains(.addFlag) {
+            restoreOrInit(signal: signal, key: key, flags: flags)
+        } else if moved {
+            snapshotWhenSettled(signal: signal, key: key)
+        } else if let profile = ProfileStore.load()[key], LayoutApplier.matches(profile) {
+            NSLog("de-monitor: setup for %@ already active", key)
         } else {
-            snapshotOnMove(signal: signal, key: key)
+            // No port change (launch/wake/mode change): a mismatch here may be
+            // a deliberate user state, so never yank it back. Restoring happens
+            // on Add only; a user arrange will snapshot via a Moved event.
+            NSLog("de-monitor: arrangement differs from saved for %@, leaving untouched (no port change)", key)
         }
     }
 
-    private func restoreOrInit(signal: PortSignal, key: String) {
+    private func restoreOrInit(signal: PortSignal, key: String, flags: CGDisplayChangeSummaryFlags) {
         guard let profile = ProfileStore.load()[key] else {
-            NSLog("de-monitor: no saved setup for %@, snapshotting current", key)
-            snapshotCurrent(signal: signal, key: key)
+            // Adopt the user's arrangement only if one is already happening
+            // in this window; never persist a system default as a setup.
+            if flags.contains(.movedFlag) || flags.contains(.desktopShapeChangedFlag) {
+                snapshotCurrent(signal: signal, key: key)
+            } else {
+                NSLog("de-monitor: no saved setup for %@, doing nothing (arrange in Settings to create one)", key)
+            }
             return
         }
         if LayoutApplier.matches(profile) {
-            lastAppliedKey = key
             NSLog("de-monitor: setup for %@ already active, skipping reconfig", key)
             return
         }
         if LayoutApplier.apply(profile) {
-            lastAppliedKey = key
             cooldownUntil = Date().addingTimeInterval(5)
             NSLog("de-monitor: applied saved setup for %@", key)
         } else {
@@ -88,13 +98,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu(signal: signal)
     }
 
-    private func snapshotOnMove(signal: PortSignal, key: String) {
+    private func snapshotWhenSettled(signal: PortSignal, key: String) {
         // Moves right after our own apply are its echo, not the user.
         if Date() < cooldownUntil {
             NSLog("de-monitor: ignoring move during post-apply cooldown")
             return
         }
-        snapshotCurrent(signal: signal, key: key)
+        // The system may still be settling right after launch.
+        if Date().timeIntervalSince(launchedAt) < 15 {
+            NSLog("de-monitor: ignoring move during launch settling")
+            return
+        }
+        // Persist only a resting state: re-read after a pause, save only if
+        // unchanged (mid-drag transients never match twice).
+        settleTimer?.invalidate()
+        let first = LayoutApplier.currentOrigins().internalOrigin
+        settleTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            if Date() < self.cooldownUntil {
+                NSLog("de-monitor: ignoring settled snapshot during post-apply cooldown")
+                return
+            }
+            let second = LayoutApplier.currentOrigins()
+            guard let first, let current = second.internalOrigin,
+                  second.external != nil, current == first else {
+                NSLog("de-monitor: arrangement still changing, snapshot deferred")
+                return
+            }
+            self.snapshotCurrent(signal: signal, key: key)
+        }
     }
 
     private func snapshotCurrent(signal: PortSignal, key: String) {

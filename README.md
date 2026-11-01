@@ -5,10 +5,13 @@ USB-C port the external monitor is plugged into.
 
 No manual actions: everything is managed via System Settings → Arrange
 Displays; the app only remembers the last arrangement per port:
-- display **added** (or launch/wake) → restore the saved setup for that
-  port, or snapshot the current arrangement as the initial one;
-- display **moved** by the user → snapshot the new arrangement;
-- moves within 5s after the app's own apply are ignored (echo, not user).
+- display **added** → restore the saved setup, or adopt the user's
+  arrangement if one is already happening (never a system default);
+- user **move** → snapshot, but only a resting state (re-read after a
+  pause; mid-drag transients are discarded);
+- launch/wake without a port change never restores — a mismatch is left
+  untouched rather than yanked back;
+- moves within 5s after the app's own apply, or 15s after launch, are ignored.
 Every save/apply/skip is logged (Console). `de-monitor --remember`
 stays as an emergency manual snapshot.
 
