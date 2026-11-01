@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cooldownUntil = Date.distantPast
     private var launchedAt = Date()
     private var settleTimer: Timer?
+    private var initialSnapshotTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchedAt = Date()
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSWorkspace.didWakeNotification, object: nil)
 
         scheduleSwitch()
+        scheduleInitialSnapshot()
     }
 
     @objc private func onWake() {
@@ -100,6 +102,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("de-monitor: apply failed (single display?)")
         }
         rebuildMenu(signal: signal)
+    }
+
+    private func scheduleInitialSnapshot() {
+        // First launch with a monitor but no saved setup: adopt the current
+        // arrangement once, past the launch-settling window. Still goes
+        // through the settle check, so boot transients are not persisted.
+        // Wake is out of scope: only a fresh process has no event history.
+        let delay = max(0, 16 - Date().timeIntervalSince(launchedAt))
+        initialSnapshotTimer?.invalidate()
+        initialSnapshotTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            let signal = Detector.detect()
+            guard signal.hasIdentity else { return }
+            guard ProfileStore.load()[signal.key] == nil else { return }
+            NSLog("de-monitor: no saved setup for %@, adopting current arrangement", signal.key)
+            self.snapshotWhenSettled(signal: signal, key: signal.key)
+        }
     }
 
     private func snapshotWhenSettled(signal: PortSignal, key: String, attempts: Int = 3) {

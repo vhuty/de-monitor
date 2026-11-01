@@ -11,6 +11,8 @@ Displays; the app only remembers the last arrangement per port:
   pause; mid-drag transients are discarded);
 - launch/wake without a port change never restores — a mismatch is left
   untouched rather than yanked back;
+- launch with a monitor but no saved setup → one delayed attempt to adopt
+  the current arrangement after launch settling (still settle-checked);
 - moves within 5s after the app's own apply, or 15s after launch, are ignored.
 Every save/apply/skip is logged (Console). `de-monitor --remember`
 stays as an emergency manual snapshot.
