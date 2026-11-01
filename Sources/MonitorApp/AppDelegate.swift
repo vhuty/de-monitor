@@ -14,9 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         launchedAt = Date()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            // Emoji has no menu-bar glyph (renders as "?"); use an SF Symbol.
-            let icon = NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
-                ?? NSImage(systemSymbolName: "display", accessibilityDescription: "de-monitor")
+            // Custom glyph: monitor + plug, composited from SF Symbols at
+            // runtime (no assets) and rendered as a template for the tint.
+            let icon = makeStatusIcon()
+                ?? NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
+            icon?.isTemplate = true
             button.image = icon
             button.toolTip = "de-monitor: USB-C display switcher"
         }
@@ -203,6 +205,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
     }
 
     // MARK: - Menu
+
+    private func makeStatusIcon() -> NSImage? {
+        // Wide canvas: monitor left, plug right, both aspect-fit.
+        let size = NSSize(width: 26, height: 18)
+        guard let monitor = NSImage(systemSymbolName: "display", accessibilityDescription: nil),
+              let plug = NSImage(systemSymbolName: "cable.connector", accessibilityDescription: nil) else {
+            return nil
+        }
+        let icon = NSImage(size: size)
+        icon.lockFocus()
+        monitor.draw(in: aspectFit(monitor.size, in: NSRect(x: 0, y: 0, width: 18, height: 18)))
+        plug.draw(in: aspectFit(plug.size, in: NSRect(x: 19, y: 0, width: 7, height: 18)))
+        icon.unlockFocus()
+        return icon
+    }
+
+    private func aspectFit(_ inner: NSSize, in outer: NSRect) -> NSRect {
+        guard inner.width > 0, inner.height > 0 else { return outer }
+        let scale = min(outer.width / inner.width, outer.height / inner.height)
+        let fitted = NSSize(width: inner.width * scale, height: inner.height * scale)
+        return NSRect(
+            x: outer.minX + (outer.width - fitted.width) / 2,
+            y: outer.minY + (outer.height - fitted.height) / 2,
+            width: fitted.width, height: fitted.height)
+    }
 
     private func rebuildMenu(signal: PortSignal) {
         let menu = NSMenu()
