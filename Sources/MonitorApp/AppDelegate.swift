@@ -195,12 +195,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         header.isEnabled = false
         menu.addItem(header)
 
-        let saved: DisplayProfile? = signal.hasIdentity ? ProfileStore.load()[signal.key] : nil
-        let state = NSMenuItem(
-            title: saved.map { "saved (\($0.internalOrigin.x),\($0.internalOrigin.y))" } ?? "—",
-            action: nil, keyEquivalent: "")
-        state.isEnabled = false
-        menu.addItem(state)
+        if signal.hasIdentity, ProfileStore.load()[signal.key] != nil {
+            let reset = NSMenuItem(title: "Reset configuration…",
+                                   action: #selector(resetConfiguration), keyEquivalent: "")
+            reset.target = self
+            menu.addItem(reset)
+        }
         menu.addItem(.separator())
 
         let arrange = NSMenuItem(title: "Arrange Displays…",
@@ -229,6 +229,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("de-monitor: could not open Displays settings: %@", String(describing: error))
             }
         }
+    }
+
+    @objc private func resetConfiguration() {
+        let signal = Detector.detect()
+        guard signal.hasIdentity else { return }
+        var setups = ProfileStore.load()
+        guard setups.removeValue(forKey: signal.key) != nil else { return }
+        do {
+            try ProfileStore.save(setups)
+            NSLog("de-monitor: configuration reset for %@", signal.key)
+        } catch {
+            NSLog("de-monitor: reset save failed: %@", String(describing: error))
+        }
+        rebuildMenu(signal: signal)
     }
 
     @objc private func toggleAutostart() {
