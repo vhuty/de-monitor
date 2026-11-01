@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = icon
             button.toolTip = "de-monitor: USB-C display switcher"
         }
-        rebuildMenu(signal: PortSignal(), saved: nil)
+        rebuildMenu(signal: PortSignal())
 
         // Debounce covers link training after replug.
         CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let key = signal.key
         let setups = ProfileStore.load()
         let saved = key.isEmpty ? nil : setups[key]
-        rebuildMenu(signal: signal, saved: saved)
+        rebuildMenu(signal: signal)
         guard signal.hasIdentity else {
             NSLog("de-monitor: no external display, skipping auto-apply")
             return
@@ -71,39 +71,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSLog("de-monitor: apply failed (single display?)")
         }
-        rebuildMenu(signal: signal, saved: saved)
+        rebuildMenu(signal: signal)
     }
 
     // MARK: - Menu
 
-    private func rebuildMenu(signal: PortSignal, saved: DisplayProfile?) {
+    private func rebuildMenu(signal: PortSignal) {
         let menu = NSMenu()
 
-        let signalTitle: String
+        let title: String
         if signal.hasIdentity {
-            var parts = ["PortID \(signal.portID.map(String.init) ?? "-")", signal.address ?? "-"]
-            if let product = signal.productName {
-                parts.append(product)
-            }
-            signalTitle = parts.joined(separator: " · ")
+            let name = signal.productName ?? "External display"
+            let portID = signal.portID.map(String.init) ?? "-"
+            let address = signal.address ?? "-"
+            title = "\(name) (PortID \(portID) · \(address))"
         } else {
-            signalTitle = "No external display"
+            title = "No external display"
         }
-        let signalItem = NSMenuItem(title: signalTitle, action: nil, keyEquivalent: "")
-        signalItem.isEnabled = false
-        menu.addItem(signalItem)
-
-        let savedTitle: String
-        if let saved {
-            savedTitle = "This port: saved (\(saved.internalOrigin.x),\(saved.internalOrigin.y))"
-        } else if signal.hasIdentity {
-            savedTitle = "This port: not saved yet"
-        } else {
-            savedTitle = "This port: —"
-        }
-        let savedItem = NSMenuItem(title: savedTitle, action: nil, keyEquivalent: "")
-        savedItem.isEnabled = false
-        menu.addItem(savedItem)
+        let header = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
         menu.addItem(.separator())
 
         let remember = NSMenuItem(title: "Remember current for this port…",
@@ -132,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setups[signal.key] = DisplayProfile(internalOrigin: origin)
         try? ProfileStore.save(setups)
         lastAppliedKey = signal.key
-        rebuildMenu(signal: signal, saved: setups[signal.key])
+        rebuildMenu(signal: signal)
     }
 
     @objc private func toggleAutostart() {
@@ -142,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("de-monitor: autostart toggle failed: \(error)")
         }
         let signal = Detector.detect()
-        rebuildMenu(signal: signal, saved: ProfileStore.load()[signal.key])
+        rebuildMenu(signal: signal)
     }
 }
 

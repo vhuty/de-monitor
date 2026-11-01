@@ -75,9 +75,9 @@ xcrun swift run de-monitor-app
 
 `CGDisplayRegisterReconfigurationCallback` → ~2s debounce (link training)
 → detect → restore saved setup, plus a wake-from-sleep trigger. Menu shows
-factual port info (`PortID · Address · product`), this-port saved state,
-"remember current", login-item toggle (`SMAppService`), quit. Manual
-restore stays available via `de-monitor --apply`. For `Start at login`
+`<name> (PortID <id> · <address>)`, "remember current", login-item toggle
+(`SMAppService`), quit. Manual restore stays available via
+`de-monitor --apply`. For `Start at login`
 to work the binary must be bundled as a `.app` (packaging TBD).
 
 ## Files
