@@ -1,11 +1,9 @@
 import Foundation
 
-/// JSON profile store at ~/.config/de-monitor/profiles.json.
-/// Missing file -> built-in defaults (plan: graceful fallback + manual mode).
 public enum ProfileStore {
     public struct Stored: Codable, Sendable {
         public var layouts: PortLayouts
-        public init(layouts: PortLayouts = .defaults()) {
+        public init(layouts: PortLayouts = PortLayouts()) {
             self.layouts = layouts
         }
     }

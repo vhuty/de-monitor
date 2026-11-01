@@ -1,3 +1,5 @@
+import CoreGraphics
+import Foundation
 import Testing
 @testable import DisplaySwitcherCore
 
@@ -27,28 +29,33 @@ struct PortIdentityTests {
         #expect(classifyPort(signal: PortSignal(portID: 7, address: "bogus")) == .unknown)
     }
 
-    @Test("default layouts match measured hardware")
-    func defaultLayouts() {
-        let layouts = PortLayouts.defaults()
-        #expect(layouts.right.internalOrigin == CGPointCodable(x: -1512, y: 278))
-        #expect(layouts.profile(for: .left).internalOrigin.x == 524)
-        #expect(layouts.profile(for: .unknown) == layouts.right)
+    @Test("empty layouts: nothing configured")
+    func emptyLayouts() {
+        let layouts = PortLayouts()
+        #expect(layouts.left == nil)
+        #expect(layouts.right == nil)
+        #expect(layouts.profile(for: .left) == nil)
+        #expect(layouts.profile(for: .right) == nil)
+        #expect(layouts.profile(for: .unknown) == nil)
+    }
+
+    @Test("layouts survive a JSON round-trip")
+    func jsonRoundTrip() throws {
+        let layouts = PortLayouts(
+            left: DisplayProfile(internalOrigin: CGPoint(x: 1, y: 2), note: "n"))
+        let data = try JSONEncoder().encode(layouts)
+        let decoded = try JSONDecoder().decode(PortLayouts.self, from: data)
+        #expect(decoded == layouts)
     }
 
     @Test("matches() reflects the live arrangement")
     func matchesLiveArrangement() {
-        // Runs against the real displays: must not crash and must agree
-        // with currentOrigins().
-        let stored = ProfileStore.load()
         let origins = LayoutApplier.currentOrigins()
-        let rightMatches = LayoutApplier.matches(stored.layouts.right)
-        if let io = origins.internalOrigin, let eo = origins.external {
-            let expected = Int(eo.x) == 0 && Int(eo.y) == 0
-                && Int(io.x) == stored.layouts.right.internalOrigin.x
-                && Int(io.y) == stored.layouts.right.internalOrigin.y
-            #expect(rightMatches == expected)
-        } else {
-            #expect(rightMatches == false)
+        guard let io = origins.internalOrigin, origins.external != nil else {
+            return
         }
+        #expect(LayoutApplier.matches(DisplayProfile(internalOrigin: io)) == (Int(origins.external!.x) == 0 && Int(origins.external!.y) == 0))
+        let shifted = DisplayProfile(internalOrigin: CGPoint(x: io.x + 1, y: io.y))
+        #expect(LayoutApplier.matches(shifted) == false)
     }
 }

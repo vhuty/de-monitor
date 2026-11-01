@@ -3,8 +3,10 @@
 macOS MenuBar app + CLI that auto-switches display arrangement based on which
 USB-C port the external monitor is plugged into (MacBook Pro M4).
 
-- **Left USB-C** → laptop under monitor (default centered: internal `(524,1440)`)
-- **Right USB-C** → laptop left of monitor (measured: internal `(-1512,278)`)
+Workflow: arrange displays in System Settings → save with
+`de-monitor --remember [left|right]` (or "Remember current" in the menu)
+→ the app restores the saved arrangement whenever that port is used.
+No built-in geometry: a port without a saved layout is left untouched.
 
 ## Detection signal (proven by A-B-A replug test)
 
@@ -47,13 +49,13 @@ Needs `/opt/homebrew/bin/displayplacer` only for manual inspection
 ```sh
 xcrun swift run de-monitor --detect    # (PortID, Address) -> port
 xcrun swift run de-monitor --status    # detect + current layout + profiles
-xcrun swift run de-monitor --apply [left|right]   # default: auto by port
-xcrun swift run de-monitor --remember [left|right] # save current arrangement
+xcrun swift run de-monitor --apply [left|right] [--force]  # default: auto by port; skips if already active or unsaved
+xcrun swift run de-monitor --remember [left|right] # save current arrangement for the port
 xcrun swift run de-monitor --list      # current display origins
 ```
 
-Profiles live in `~/.config/de-monitor/profiles.json` (created with
-measured defaults on first `--remember`/menu use; missing file → defaults).
+Profiles live in `~/.config/de-monitor/profiles.json` (created on first
+`--remember`/menu use; missing file → nothing configured).
 
 ## MenuBar app
 
@@ -82,5 +84,3 @@ must be bundled as a `.app` (packaging TBD).
 - Undocumented IOKit fields may change in future macOS → fallback + manual mode.
 - Sleep/wake path untested → debounce + wake trigger (verify on hardware).
 - Left ports measured once each → re-run `--detect` on each left port to confirm.
-- "Below" default `(524,1440)` is computed centered, not measured — adjust
-  with `--remember left` after arranging in System Settings.

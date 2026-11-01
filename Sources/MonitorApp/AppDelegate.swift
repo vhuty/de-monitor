@@ -9,8 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            // SF Symbol renders natively in light/dark mode; emoji (e.g. 🖵)
-            // has no glyph in the menu-bar font and shows as "?".
+            // Emoji has no menu-bar glyph (renders as "?"); use an SF Symbol.
             let icon = NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
                 ?? NSImage(systemSymbolName: "display", accessibilityDescription: "de-monitor")
             button.image = icon
@@ -18,21 +17,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         rebuildMenu(port: .unknown, signal: PortSignal())
 
-        // Reconfiguration callback -> debounced detect+apply (link training needs ~2s).
+        // Debounce covers link training after replug.
         CGDisplayRegisterReconfigurationCallback({ _, flags, _ in
-            // Ignore the begin-configuration notification; act on completion.
             if flags.contains(.beginConfigurationFlag) { return }
             DispatchQueue.main.async {
                 MonitorApp.shared?.scheduleSwitch(reason: "reconfig")
             }
         }, nil)
 
-        // Wake-from-sleep trigger (untested per plan — harmless if redundant).
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(onWake),
             name: NSWorkspace.didWakeNotification, object: nil)
 
-        // Initial: refresh menu, apply if external present.
         scheduleSwitch(reason: "launch")
     }
 
@@ -55,12 +51,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                   String(describing: signal.portID), signal.address ?? "nil")
             return
         }
-        // Avoid redundant applies (e.g. duplicate callbacks for both displays).
         if port == lastApplied && reason == "reconfig" {
-            // Still applied once per launch/wake; skip repeats.
             return
         }
-        let profile = ProfileStore.load().layouts.profile(for: port)
+        guard let profile = ProfileStore.load().layouts.profile(for: port) else {
+            NSLog("de-monitor: no saved layout for %@, skipping (arrange + Remember current)", port.rawValue)
+            rebuildMenu(port: port, signal: signal)
+            return
+        }
         if LayoutApplier.matches(profile) {
             lastApplied = port
             NSLog("de-monitor: %@ layout already active, skipping reconfig", port.rawValue)
@@ -79,6 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu
 
+    private func savedState(_ profile: DisplayProfile?) -> String {
+        guard let profile else { return "—" }
+        return "(\(profile.internalOrigin.x),\(profile.internalOrigin.y))"
+    }
+
     private func rebuildMenu(port: PhysicalPort, signal: PortSignal) {
         let menu = NSMenu()
         let statusTitle = port == .unknown
@@ -93,6 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: nil, keyEquivalent: "")
         detail.isEnabled = false
         menu.addItem(detail)
+
+        let stored = ProfileStore.load()
+        let layoutsState = NSMenuItem(
+            title: "Saved: left \(savedState(stored.layouts.left)) · right \(savedState(stored.layouts.right))",
+            action: nil, keyEquivalent: "")
+        layoutsState.isEnabled = false
+        menu.addItem(layoutsState)
         menu.addItem(.separator())
 
         let remember = NSMenuItem(title: "Remember current for this port…",

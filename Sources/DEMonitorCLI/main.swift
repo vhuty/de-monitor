@@ -15,6 +15,13 @@ func printUsage() {
 
 let args = CommandLine.arguments.dropFirst()
 
+func describe(_ profile: DisplayProfile?) -> String {
+    guard let profile else {
+        return "not configured (arrange in Settings, then --remember)"
+    }
+    return "internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) \(profile.note)"
+}
+
 guard let cmd = args.first else {
     printUsage()
     exit(2)
@@ -35,8 +42,8 @@ case "--status":
     print(LayoutApplier.describeCurrent())
     let stored = ProfileStore.load()
     print("--- profiles (\(ProfileStore.configURL.path)) ---")
-    print("left:  (\(stored.layouts.left.internalOrigin.x),\(stored.layouts.left.internalOrigin.y)) \(stored.layouts.left.note)")
-    print("right: (\(stored.layouts.right.internalOrigin.x),\(stored.layouts.right.internalOrigin.y)) \(stored.layouts.right.note)")
+    print("left:  \(describe(stored.layouts.left))")
+    print("right: \(describe(stored.layouts.right))")
 
 case "--list":
     print(LayoutApplier.describeCurrent())
@@ -52,6 +59,14 @@ case "--apply":
         port = Detector.classified().port
     }
     let profile = stored.layouts.profile(for: port)
+    guard let profile else {
+        if port == .unknown {
+            print("Unknown port; specify explicitly: --apply [left|right]")
+        } else {
+            print("No saved layout for \(port.rawValue) yet — arrange displays in System Settings, then `de-monitor --remember \(port.rawValue)`")
+        }
+        exit(1)
+    }
     if !force && LayoutApplier.matches(profile) {
         print("\(port.rawValue) layout already active: internal (\(profile.internalOrigin.x),\(profile.internalOrigin.y)) — skipping (use --force to re-apply)")
         break
