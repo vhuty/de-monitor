@@ -63,8 +63,9 @@ xcrun swift run de-monitor-app
 
 `CGDisplayRegisterReconfigurationCallback` → ~2s debounce (link training)
 → detect → apply, plus a wake-from-sleep trigger. Menu shows detected
-port + signal, per-port apply items, "remember current", login-item
-toggle (`SMAppService`), quit. For `Start at login` to work the binary
+port + signal, "remember current", login-item
+toggle (`SMAppService`), quit. Manual apply stays available via
+`de-monitor --apply`. For `Start at login` to work the binary
 must be bundled as a `.app` (packaging TBD).
 
 ## Files

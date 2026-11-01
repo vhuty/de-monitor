@@ -8,8 +8,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "🖵"
-        statusItem.button?.toolTip = "de-monitor: USB-C display switcher"
+        if let button = statusItem.button {
+            // SF Symbol renders natively in light/dark mode; emoji (e.g. 🖵)
+            // has no glyph in the menu-bar font and shows as "?".
+            let icon = NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
+                ?? NSImage(systemSymbolName: "display", accessibilityDescription: "de-monitor")
+            button.image = icon
+            button.toolTip = "de-monitor: USB-C display switcher"
+        }
         rebuildMenu(port: .unknown, signal: PortSignal())
 
         // Reconfiguration callback -> debounced detect+apply (link training needs ~2s).
@@ -69,8 +75,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu(port: PhysicalPort, signal: PortSignal) {
         let menu = NSMenu()
-        let stored = ProfileStore.load()
-
         let statusTitle = port == .unknown
             ? "Port: unknown (no/undetected external)"
             : "Port: \(port.rawValue) — \(port.displayName)"
@@ -83,17 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: nil, keyEquivalent: "")
         detail.isEnabled = false
         menu.addItem(detail)
-        menu.addItem(.separator())
-
-        for p in [PhysicalPort.left, PhysicalPort.right] {
-            let prof = stored.layouts.profile(for: p)
-            let item = NSMenuItem(
-                title: "Apply \(p.rawValue) (\(prof.internalOrigin.x),\(prof.internalOrigin.y))",
-                action: #selector(applyChosen(_:)), keyEquivalent: "")
-            item.representedObject = p.rawValue
-            item.target = self
-            menu.addItem(item)
-        }
         menu.addItem(.separator())
 
         let remember = NSMenuItem(title: "Remember current for this port…",
@@ -112,14 +105,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
 
         statusItem.menu = menu
-    }
-
-    @objc private func applyChosen(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let port = PhysicalPort(rawValue: raw) else { return }
-        let profile = ProfileStore.load().layouts.profile(for: port)
-        LayoutApplier.apply(profile)
-        lastApplied = port
     }
 
     @objc private func rememberCurrent() {
