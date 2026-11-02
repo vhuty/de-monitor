@@ -1,79 +1,25 @@
-# de-monitor
+# de-monitor? 🤔
 
-macOS MenuBar app + CLI that restores the display arrangement for the
-USB-C port the external monitor is plugged into.
+macOS MenuBar app + CLI that restores the display arrangement
+for the USB-C port the external monitor is plugged into.
 
-No manual actions: everything is managed via System Settings → Arrange
-Displays; the app only remembers the last arrangement per port:
-- display **added** → restore the saved setup, or adopt the user's
-  arrangement if one is already happening (never a system default);
-- user **move** → snapshot, but only a resting state (re-read after a
-  pause; mid-drag transients are discarded);
-- launch/wake without a port change never restores — a mismatch is left
-  untouched rather than yanked back;
-- launch with a monitor but no saved setup → one delayed attempt to adopt
-  the current arrangement after launch settling (still settle-checked);
-- moves within 5s after the app's own apply, or 15s after launch, are ignored.
-Every save/apply/skip is logged (Console). `de-monitor --remember`
-stays as an emergency manual snapshot.
+## How it works
 
-## Detection signal (proven by A-B-A replug test)
+- Plug the monitor into a USB-C port → restores the arrangement last saved for that port.
+- Rearrange displays in System Settings → arrangement is remembered automatically.
+- No port change on launch/wake → current arrangement is left untouched.
 
-Each socket reports stable IOKit facts: `PortID`
-(`IOMobileFramebufferShim.DisplayAttributes`) and `Address`
-(`AppleDisplayConnectionManager.ConnectionMapping`). Observed on this
-hardware:
+## Requirements
 
-| PortID | Address |
-|---|---|
-| 0 | 0.0.0 |
-| 16 | 0.1.0 |
-| 32 | 0.2.0 |
-
-The pair is used as-is (e.g. `32/0.2.0`) to key saved setups — no
-interpretation of which physical socket it "should" be. No identifiable
-port, or no saved setup for it → nothing is auto-applied.
-
-Implementation note: the plan originally suggested `CGDisplayIOServicePort`
-→ parent shim, but that API is marked unavailable in the macOS SDK, so
-detection enumerates `IOMobileFramebufferShim` services directly (the
-external monitor's shim is the one whose `DisplayAttributes` contains
-`PortID`) and joins `ConnectionMapping` on `ProductName`. Read-only IOKit,
-no entitlements.
-
-Applying uses `CGBeginDisplayConfiguration → CGConfigureDisplayOrigin ×2 →
-CGCompleteDisplayConfiguration` (same mechanism as displayplacer).
-External stays at `(0,0)`, which keeps it the main display.
+- macOS 14+
+- Xcode toolchain
 
 ## Build
-
-Requires Xcode toolchain (a standalone swiftly toolchain fails with
-`unknown argument: '-target-arch-variant'`):
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 xcrun swift build
 xcrun swift test
-```
-
-Needs `/opt/homebrew/bin/displayplacer` only for manual inspection
-(`displayplacer list`); not a runtime dependency.
-
-## CLI
-
-```sh
-xcrun swift run de-monitor --detect    # PortID/Address/product/port key
-xcrun swift run de-monitor --status    # detect + current layout + saved setups
-xcrun swift run de-monitor --apply [port-key] [--force]  # default: current port; skips if already active or unsaved
-xcrun swift run de-monitor --remember  # save current arrangement for the current port
-xcrun swift run de-monitor --list      # current display origins
-```
-
-`~/.config/de-monitor/profiles.json` maps port key to arrangement —
-nothing else:
-
-```json
-{"32/0.2.0": {"internalOrigin": {"x": -1512, "y": 278}}}
 ```
 
 ## MenuBar app
@@ -82,24 +28,16 @@ nothing else:
 xcrun swift run de-monitor-app
 ```
 
-`CGDisplayRegisterReconfigurationCallback` → ~2s debounce (link training)
-→ detect → restore saved setup, plus a wake-from-sleep trigger. Menu shows
-`<name> (PortID <id> · <address>)` plus a compact saved-state line,
-login-item toggle (`SMAppService`), quit. Manual restore/snapshot via
-`de-monitor --apply` / `--remember`. For `Start at login`
-to work the binary must be bundled as a `.app` (packaging TBD).
+Runs in the menu bar, restores the saved setup on connect.
+Menu: Arrange Displays shortcut, Reset configuration (when saved),
+Start at login toggle, Quit.
 
-## Files
+## CLI
 
-- `Sources/DisplaySwitcherCore/` — `PortSignal` (opaque identity),
-  `Detector` (IOKit), `Layouts` (profiles), `ProfileStore` (JSON),
-  `LayoutApplier` (CoreGraphics)
-- `Sources/DEMonitorCLI/` — CLI
-- `Sources/MonitorApp/` — MenuBar agent
-- `Tests/DisplaySwitcherCoreTests/` — classification tests
-
-## Risks (per plan)
-
-- Undocumented IOKit fields may change in future macOS → setups keyed by
-  old values stop matching (re-run `--remember`); unknown ports are skipped.
-- Sleep/wake path untested → debounce + wake trigger (verify on hardware).
+```sh
+xcrun swift run de-monitor --detect
+xcrun swift run de-monitor --status
+xcrun swift run de-monitor --apply [port-key] [--force]
+xcrun swift run de-monitor --remember
+xcrun swift run de-monitor --list
+```
