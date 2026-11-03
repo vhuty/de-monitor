@@ -5,11 +5,13 @@ public struct PortSignal: Sendable, Equatable {
     public var portID: Int?
     public var address: String?
     public var productName: String?
+    public var portType: String?
 
-    public init(portID: Int? = nil, address: String? = nil, productName: String? = nil) {
+    public init(portID: Int? = nil, address: String? = nil, productName: String? = nil, portType: String? = nil) {
         self.portID = portID
         self.address = address
         self.productName = productName
+        self.portType = portType
     }
 
     /// Stable key for saved setups. Empty when no port is identifiable

@@ -5,7 +5,7 @@ func printUsage() {
     print("""
     de-monitor — USB-C port display switcher
     Usage:
-      de-monitor --detect              print PortID/Address/product/port key
+      de-monitor --detect              print Type/PortID/Address/product/port key
       de-monitor --status               detect + current layout + saved setups
       de-monitor --apply [port-key] [--force]  restore setup (default: current port)
       de-monitor --remember             save current arrangement for the current port
@@ -23,6 +23,7 @@ guard let cmd = args.first else {
 switch cmd {
 case "--detect":
     let signal = Detector.detect()
+    print("Type: \(signal.portType ?? "nil")")
     print("PortID: \(signal.portID.map(String.init) ?? "nil")")
     print("Address: \(signal.address ?? "nil")")
     print("Product: \(signal.productName ?? "nil")")
@@ -30,7 +31,7 @@ case "--detect":
 
 case "--status":
     let signal = Detector.detect()
-    print("PortID: \(signal.portID.map(String.init) ?? "nil")  Address: \(signal.address ?? "nil")")
+    print("Type: \(signal.portType ?? "nil")  PortID: \(signal.portID.map(String.init) ?? "nil")  Address: \(signal.address ?? "nil")")
     print("--- current ---")
     print(LayoutApplier.describeCurrent())
     let setups = ProfileStore.load()

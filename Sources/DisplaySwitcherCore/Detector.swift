@@ -25,12 +25,21 @@ public enum Detector {
         let shims = findExternalShims()
         let addressByProduct = connectionAddressesByProduct()
         let fallbackAddress = connectionAddresses().first
+        let transports = findDisplayPortTransports()
+        let transportByProduct = Dictionary(
+            uniqueKeysWithValues: transports.compactMap { t in
+                t.productName.map { ($0, t) }
+            }
+        )
+        let fallbackTransport = transports.first(where: { $0.active }) ?? transports.first
 
         // No external shim (e.g. lid closed / no monitor): still report
         // connection mapping if present so --detect shows something.
         if shims.isEmpty {
+            let name = fallbackAddress?.productName
             return [PortSignal(portID: nil, address: fallbackAddress?.address,
-                               productName: fallbackAddress?.productName)]
+                               productName: name,
+                               portType: transportByProduct[name ?? ""]?.portType ?? fallbackTransport?.portType)]
         }
         return shims.map { shim in
             var address: String?
@@ -38,8 +47,14 @@ public enum Detector {
                 address = addressByProduct[name]?.address
             }
             address = address ?? fallbackAddress?.address
+            let portType: String?
+            if let name = shim.productName, let t = transportByProduct[name] {
+                portType = t.portType
+            } else {
+                portType = fallbackTransport?.portType
+            }
             return PortSignal(portID: shim.portID, address: address,
-                              productName: shim.productName)
+                              productName: shim.productName, portType: portType)
         }
     }
 
@@ -116,6 +131,45 @@ public enum Detector {
         return dict
     }
 
+    struct TransportInfo: Sendable {
+        var portType: String?
+        var portNumber: Int?
+        var productName: String?
+        var active: Bool
+    }
+
+    static func findDisplayPortTransports() -> [TransportInfo] {
+        var out: [TransportInfo] = []
+        guard let matching = IOServiceMatching("IOPortTransportStateDisplayPort") else { return out }
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(0, matching, &iterator) == KERN_SUCCESS else { return out }
+        defer { IOObjectRelease(iterator) }
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            let current = service
+            defer { IOObjectRelease(current) }
+            let parentType = rawProp(current, "ParentPortTypeDescription") as? String
+            let transportDescription = rawProp(current, "TransportDescription") as? String
+            let portType = parentType ?? parsedPortType(from: transportDescription)
+            out.append(TransportInfo(
+                portType: portType,
+                portNumber: numberToInt(rawProp(current, "ParentPortNumber")),
+                productName: rawProp(current, "ProductName") as? String,
+                active: numberToBool(rawProp(current, "Active"))
+            ))
+            service = IOIteratorNext(iterator)
+        }
+        return out
+    }
+
+    static func parsedPortType(from transportDescription: String?) -> String? {
+        guard let d = transportDescription, d.hasPrefix("Port-") else { return nil }
+        let rest = d.dropFirst("Port-".count)
+        if rest.hasPrefix("USB-C") { return "USB-C" }
+        if rest.hasPrefix("HDMI") { return "HDMI" }
+        return nil
+    }
+
     // MARK: - Helpers
 
     static func numberToInt(_ value: Any?) -> Int? {
@@ -127,5 +181,20 @@ public enum Detector {
         case let n as NSNumber: return n.intValue
         default: return nil
         }
+    }
+
+    static func numberToBool(_ value: Any?) -> Bool {
+        switch value {
+        case let b as Bool: return b
+        case let n as NSNumber: return n.intValue != 0
+        case let n as Int: return n != 0
+        default: return false
+        }
+    }
+
+    static func rawProp(_ service: io_service_t, _ key: String) -> Any? {
+        IORegistryEntryCreateCFProperty(
+            service, key as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue() as Any?
     }
 }

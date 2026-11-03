@@ -237,9 +237,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         let title: String
         if signal.hasIdentity {
             let name = signal.productName ?? "External display"
-            let portID = signal.portID.map(String.init) ?? "-"
-            let address = signal.address ?? "-"
-            title = "\(name) (PortID \(portID) · \(address))"
+            if let portType = signal.portType {
+                title = "\(name) (\(portType))"
+            } else {
+                title = name
+            }
         } else {
             title = "No external display"
         }
