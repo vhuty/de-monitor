@@ -1,17 +1,17 @@
 # de-monitor? 🤔
 
 macOS MenuBar app + CLI that restores the display arrangement
-for the USB-C port the external monitor is plugged into.
+for the port the external monitor is plugged into (USB-C / HDMI).
 
 ## How it works
 
-- Plug the monitor into a USB-C port → restores the arrangement last saved for that port.
+- Plug the monitor into a USB-C or HDMI port → restores the arrangement last saved for that port.
 - Rearrange displays in System Settings → arrangement is remembered automatically.
-- No port change on launch/wake → current arrangement is left untouched.
 
 ## Requirements
 
-- macOS 14+
+- Apple Silicon MacBook with an external display (Intel Macs not supported: detection reads Apple Silicon display state; desktops without a built-in display can't save a two-display arrangement)
+- macOS 14+ (tested on macOS 27.2, M4 Pro)
 - Xcode toolchain
 
 ## Build

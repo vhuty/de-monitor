@@ -3,7 +3,7 @@ import Foundation
 
 func printUsage() {
     print("""
-    de-monitor — USB-C port display switcher
+    de-monitor — port display switcher (USB-C / HDMI)
     Usage:
       de-monitor --detect              print Type/PortID/Address/product/port key
       de-monitor --status               detect + current layout + saved setups
