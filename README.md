@@ -1,6 +1,7 @@
-# de-monitor? 🤔
+# De monitor
+*"Де монітор?.."* 🤔
 
-macOS app that restores the display arrangement for the port the external monitor is plugged into.
+A macOS app that restores the display arrangement for the port the external monitor is plugged into.
 
 ![De monitor menu](de-monitor.png)
 
