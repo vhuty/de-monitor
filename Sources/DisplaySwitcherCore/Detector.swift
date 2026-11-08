@@ -26,12 +26,6 @@ public enum Detector {
         let addressByProduct = connectionAddressesByProduct()
         let fallbackAddress = connectionAddresses().first
         let transports = findDisplayPortTransports()
-        let transportByProduct = Dictionary(
-            uniqueKeysWithValues: transports.compactMap { t in
-                t.productName.map { ($0, t) }
-            }
-        )
-        let fallbackTransport = transports.first(where: { $0.active }) ?? transports.first
 
         // No external shim (e.g. lid closed / no monitor): still report
         // connection mapping if present so --detect shows something.
@@ -39,7 +33,7 @@ public enum Detector {
             let name = fallbackAddress?.productName
             return [PortSignal(portID: nil, address: fallbackAddress?.address,
                                productName: name,
-                               portType: transportByProduct[name ?? ""]?.portType ?? fallbackTransport?.portType)]
+                               portType: resolvePortType(for: name, transports: transports))]
         }
         return shims.map { shim in
             var address: String?
@@ -47,14 +41,9 @@ public enum Detector {
                 address = addressByProduct[name]?.address
             }
             address = address ?? fallbackAddress?.address
-            let portType: String?
-            if let name = shim.productName, let t = transportByProduct[name] {
-                portType = t.portType
-            } else {
-                portType = fallbackTransport?.portType
-            }
             return PortSignal(portID: shim.portID, address: address,
-                              productName: shim.productName, portType: portType)
+                              productName: shim.productName,
+                              portType: resolvePortType(for: shim.productName, transports: transports))
         }
     }
 
@@ -168,6 +157,20 @@ public enum Detector {
         if rest.hasPrefix("USB-C") { return "USB-C" }
         if rest.hasPrefix("HDMI") { return "HDMI" }
         return nil
+    }
+
+    /// Pure join: shim ProductName -> transport portType, with fallback
+    /// to the active transport (single-display case). Testable without IOKit.
+    static func resolvePortType(for productName: String?, transports: [TransportInfo]) -> String? {
+        let byProduct = Dictionary(
+            uniqueKeysWithValues: transports.compactMap { t in
+                t.productName.map { ($0, t) }
+            }
+        )
+        if let name = productName, let t = byProduct[name] {
+            return t.portType
+        }
+        return (transports.first(where: { $0.active }) ?? transports.first)?.portType
     }
 
     // MARK: - Helpers
