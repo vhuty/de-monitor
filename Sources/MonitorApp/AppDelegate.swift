@@ -16,9 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         if let button = statusItem.button {
             // Custom glyph: monitor right-back + laptop left-front,
             // composited from SF Symbols at runtime (no assets) and rendered as a template for the tint.
+            // No fallback: SF Symbols are guaranteed on macOS 14+, fail loudly if missing.
             let icon = makeStatusIcon()
-                ?? NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
-            icon?.isTemplate = true
+            icon.isTemplate = true
             button.image = icon
             button.toolTip = "de-monitor: USB-C display switcher"
         }
@@ -206,11 +206,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
 
     // MARK: - Menu
 
-    private func makeStatusIcon() -> NSImage? {
+    private func makeStatusIcon() -> NSImage {
         let size = NSSize(width: 29, height: 18)
         guard let monitor = NSImage(systemSymbolName: "display", accessibilityDescription: nil),
               let laptop = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: nil) else {
-            return nil
+            fatalError("de-monitor: required SF Symbols (display, laptopcomputer) unavailable")
         }
         let icon = NSImage(size: size)
         icon.lockFocus()
