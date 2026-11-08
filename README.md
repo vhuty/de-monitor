@@ -2,6 +2,8 @@
 
 macOS app that restores the display arrangement for the port the external monitor is plugged into.
 
+![De monitor menu](de-monitor.png)
+
 ## How it works
 
 - Plug the monitor into a USB-C or HDMI port - restores the arrangement last saved for that port.
