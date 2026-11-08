@@ -14,8 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         launchedAt = Date()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            // Custom glyph: monitor + plug, composited from SF Symbols at
-            // runtime (no assets) and rendered as a template for the tint.
+            // Custom glyph: monitor right-back + laptop left-front,
+            // composited from SF Symbols at runtime (no assets) and rendered as a template for the tint.
             let icon = makeStatusIcon()
                 ?? NSImage(systemSymbolName: "display.2", accessibilityDescription: "de-monitor")
             icon?.isTemplate = true
@@ -207,16 +207,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
     // MARK: - Menu
 
     private func makeStatusIcon() -> NSImage? {
-        // Wide canvas: monitor left, plug right, both aspect-fit.
-        let size = NSSize(width: 26, height: 18)
+        let size = NSSize(width: 29, height: 18)
         guard let monitor = NSImage(systemSymbolName: "display", accessibilityDescription: nil),
-              let plug = NSImage(systemSymbolName: "cable.connector", accessibilityDescription: nil) else {
+              let laptop = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: nil) else {
             return nil
         }
         let icon = NSImage(size: size)
         icon.lockFocus()
-        monitor.draw(in: aspectFit(monitor.size, in: NSRect(x: 0, y: 0, width: 18, height: 18)))
-        plug.draw(in: aspectFit(plug.size, in: NSRect(x: 19, y: 0, width: 7, height: 18)))
+        monitor.draw(in: aspectFit(monitor.size, in: NSRect(x: 9, y: 1, width: 20, height: 15)))
+        let laptopRect = aspectFit(laptop.size, in: NSRect(x: 3, y: 0.5, width: 16, height: 12))
+        // Knock out monitor behind laptop so laptop reads as opaque.
+        // Frame strokes and base bar are opaque and cover by overdraw;
+        // only the hollow screen needs erasing. Pure geometric fill (no
+        // image-alpha knockout) to avoid fringe notches at the edges.
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current?.compositingOperation = .destinationOut
+        NSBezierPath(rect: NSRect(x: 6.5, y: 4.0, width: 8.5, height: 5.5)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        laptop.draw(in: laptopRect)
         icon.unlockFocus()
         return icon
     }
