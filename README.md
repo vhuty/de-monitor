@@ -1,9 +1,14 @@
-# De monitor
-*"Де монітор?.."* 🤔
+
+<div align="center">
+  <img src="de-monitor.png" width="500">
+
+  # De monitor
+  *"Де монітор?.."* 🤔
+</div>
+
+</br>
 
 A macOS app that restores the display arrangement for the port the external monitor is plugged into.
-
-![De monitor menu](de-monitor.png)
 
 ## How it works
 
