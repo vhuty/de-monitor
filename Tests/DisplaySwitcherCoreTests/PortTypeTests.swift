@@ -62,4 +62,13 @@ struct PortTypeTests {
         #expect(a.key == b.key)
         #expect(a.key == "48/0.3.0")
     }
+
+    @Test("gate: duplicate ProductName never traps (dock / dual same-model)")
+    func duplicateProductNameNoTrap() {
+        let transports = [
+            transport("USB-C", product: "Same", active: true),
+            transport("USB-C", product: "Same", active: true),
+        ]
+        #expect(Detector.resolvePortType(for: "Same", transports: transports) == "USB-C")
+    }
 }

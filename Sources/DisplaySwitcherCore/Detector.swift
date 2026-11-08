@@ -161,14 +161,14 @@ public enum Detector {
 
     /// Pure join: shim ProductName -> transport portType, with fallback
     /// to the active transport (single-display case). Testable without IOKit.
+    /// Gate: first-win loop, never traps on duplicate ProductNames
+    /// (two identical monitors / dock aliases share one name;
+    /// `Dictionary(uniqueKeysWithValues:)` would crash there).
     static func resolvePortType(for productName: String?, transports: [TransportInfo]) -> String? {
-        let byProduct = Dictionary(
-            uniqueKeysWithValues: transports.compactMap { t in
-                t.productName.map { ($0, t) }
+        if let name = productName {
+            for t in transports where t.productName == name {
+                return t.portType
             }
-        )
-        if let name = productName, let t = byProduct[name] {
-            return t.portType
         }
         return (transports.first(where: { $0.active }) ?? transports.first)?.portType
     }
