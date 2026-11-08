@@ -13,22 +13,6 @@ macOS app that restores the display arrangement for the port the external monito
 - macOS 14+ (tested on macOS 27.2, M4 Pro)
 - Xcode toolchain
 
-## Build
-
-```sh
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcrun swift build
-xcrun swift test
-```
-
-## MenuBar app
-
-```sh
-xcrun swift run de-monitor-app
-```
-
-Runs in the menu bar, restores the saved setup on connect.
-
 ## CLI
 
 ```sh
