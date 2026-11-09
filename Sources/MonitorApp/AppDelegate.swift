@@ -1,5 +1,6 @@
 import AppKit
 import DisplaySwitcherCore
+import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {    private var statusItem: NSStatusItem!
@@ -258,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         menu.addItem(header)
 
         if signal.hasIdentity, ProfileStore.load()[signal.key] != nil {
-            let reset = NSMenuItem(title: "Reset configuration…",
+            let reset = NSMenuItem(title: "Reset configuration",
                                    action: #selector(resetConfiguration), keyEquivalent: "")
             reset.target = self
             menu.addItem(reset)
@@ -301,10 +302,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         do {
             try ProfileStore.save(setups)
             NSLog("de-monitor: configuration reset for %@", signal.key)
+            notifyConfigurationReset()
         } catch {
             NSLog("de-monitor: reset save failed: %@", String(describing: error))
         }
         rebuildMenu(signal: signal)
+    }
+
+    private func notifyConfigurationReset() {
+        // Authorization is requested lazily on first reset only; the
+        // system prompts once, later calls just report the stored status.
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                NSLog("de-monitor: notification authorization failed: %@", String(describing: error))
+                return
+            }
+            guard granted else {
+                NSLog("de-monitor: notifications not granted, skipping reset notice")
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "De monitor"
+            content.body = "Display configuration has been reset"
+            let request = UNNotificationRequest(
+                identifier: "de-monitor.reset", content: content, trigger: nil)
+            center.add(request) { error in
+                if let error {
+                    NSLog("de-monitor: failed to post reset notice: %@", String(describing: error))
+                }
+            }
+        }
     }
 
     @objc private func toggleAutostart() {
