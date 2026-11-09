@@ -45,14 +45,29 @@ struct PortTypeTests {
         #expect(Detector.resolvePortType(for: nil, transports: transports) == "USB-C")
     }
 
-    @Test("no active transport returns nil, not a crash")
+    @Test("no active transport returns nil, never a stale ghost")
     func noActiveTransport() {
         #expect(Detector.resolvePortType(for: "X", transports: []) == nil)
+        // Idle port entries (e.g. built-in HDMI) linger with nothing
+        // plugged in: they must not surface as a ghost port type.
         let inactive = [transport("USB-C", active: false)]
-        // Single inactive entry: still reported so --detect shows something.
-        #expect(Detector.resolvePortType(for: "X", transports: inactive) == "USB-C")
+        #expect(Detector.resolvePortType(for: "X", transports: inactive) == nil)
+        #expect(Detector.resolvePortType(for: nil, transports: inactive) == nil)
         let nameless = [Detector.TransportInfo(portType: nil, portNumber: nil, productName: nil, active: false)]
         #expect(Detector.resolvePortType(for: "X", transports: nameless) == nil)
+    }
+
+    @Test("exact ProductName match wins even if the entry is inactive")
+    func exactMatchInactive() {
+        let transports = [transport("USB-C", product: "MPG 274URF QD", active: false)]
+        #expect(Detector.resolvePortType(for: "MPG 274URF QD", transports: transports) == "USB-C")
+    }
+
+    @Test("empty registry strings normalize to nil")
+    func nonEmptyStrings() {
+        #expect(Detector.nonEmpty(nil) == nil)
+        #expect(Detector.nonEmpty("") == nil)
+        #expect(Detector.nonEmpty("0.2.0") == "0.2.0")
     }
 
     @Test("portType never leaks into the setup key")

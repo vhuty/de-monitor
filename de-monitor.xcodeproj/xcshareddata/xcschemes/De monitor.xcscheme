@@ -3,37 +3,37 @@
    <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
       <BuildActionEntries>
          <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4DC965AAA77F4377927B18B9" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="7DCF79C5A5C04F6BBB7CED4E" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
          </BuildActionEntry>
-         <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B3F0CEEB8A4A4C588897F164" BuildableName="DisplaySwitcherCore.framework" BlueprintName="DisplaySwitcherCore" ReferencedContainer="container:de-monitor.xcodeproj"/>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="0DB0BC8BA01B4DCFA1CC4342" BuildableName="DisplaySwitcherCore.framework" BlueprintName="DisplaySwitcherCore" ReferencedContainer="container:de-monitor.xcodeproj"/>
          </BuildActionEntry>
-         <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="ED88B198F05C42E7A96EDCA4" BuildableName="DisplaySwitcherCoreTests.xctest" BlueprintName="DisplaySwitcherCoreTests" ReferencedContainer="container:de-monitor.xcodeproj"/>
+         <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="1A3B7BB6EAC34F69B9DB5294" BuildableName="DisplaySwitcherCoreTests.xctest" BlueprintName="DisplaySwitcherCoreTests" ReferencedContainer="container:de-monitor.xcodeproj"/>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
       <Testables>
          <TestableReference skipped="NO" parallelizable="YES">
-            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="ED88B198F05C42E7A96EDCA4" BuildableName="DisplaySwitcherCoreTests.xctest" BlueprintName="DisplaySwitcherCoreTests" ReferencedContainer="container:de-monitor.xcodeproj"/>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="1A3B7BB6EAC34F69B9DB5294" BuildableName="DisplaySwitcherCoreTests.xctest" BlueprintName="DisplaySwitcherCoreTests" ReferencedContainer="container:de-monitor.xcodeproj"/>
          </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4DC965AAA77F4377927B18B9" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="7DCF79C5A5C04F6BBB7CED4E" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
       </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4DC965AAA77F4377927B18B9" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="7DCF79C5A5C04F6BBB7CED4E" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
       </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction buildConfiguration="Debug"/>
    <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES">
       <BuildableProductRunnable runnableDebuggingMode="0">
-         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="4DC965AAA77F4377927B18B9" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
+         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="7DCF79C5A5C04F6BBB7CED4E" BuildableName="De monitor.app" BlueprintName="De monitor" ReferencedContainer="container:de-monitor.xcodeproj"/>
       </BuildableProductRunnable>
    </ArchiveAction>
 </Scheme>

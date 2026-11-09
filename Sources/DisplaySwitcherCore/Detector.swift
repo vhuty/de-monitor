@@ -27,11 +27,14 @@ public enum Detector {
         let fallbackAddress = connectionAddresses().first
         let transports = findDisplayPortTransports()
 
-        // No external shim (e.g. lid closed / no monitor): still report
-        // connection mapping if present so --detect shows something.
+        // No external shim: a connection mapping without any active
+        // transport is a stale ghost left behind by unplug (IOKit retires
+        // registry parts at different speeds), not a display. Never
+        // report it as an identity.
         if shims.isEmpty {
-            let name = fallbackAddress?.productName
-            return [PortSignal(portID: nil, address: fallbackAddress?.address,
+            guard transports.contains(where: { $0.active }) else { return [PortSignal()] }
+            let name = nonEmpty(fallbackAddress?.productName)
+            return [PortSignal(portID: nil, address: nonEmpty(fallbackAddress?.address),
                                productName: name,
                                portType: resolvePortType(for: name, transports: transports))]
         }
@@ -41,9 +44,10 @@ public enum Detector {
                 address = addressByProduct[name]?.address
             }
             address = address ?? fallbackAddress?.address
-            return PortSignal(portID: shim.portID, address: address,
-                              productName: shim.productName,
-                              portType: resolvePortType(for: shim.productName, transports: transports))
+            let productName = nonEmpty(shim.productName)
+            return PortSignal(portID: shim.portID, address: nonEmpty(address),
+                              productName: productName,
+                              portType: resolvePortType(for: productName, transports: transports))
         }
     }
 
@@ -160,7 +164,10 @@ public enum Detector {
     }
 
     /// Pure join: shim ProductName -> transport portType, with fallback
-    /// to the active transport (single-display case). Testable without IOKit.
+    /// to the active transport only. Inactive entries are never used:
+    /// idle port entries (e.g. built-in HDMI with nothing plugged in)
+    /// linger in the registry and would otherwise surface as a ghost
+    /// port type after unplug. Testable without IOKit.
     /// Gate: first-win loop, never traps on duplicate ProductNames
     /// (two identical monitors / dock aliases share one name;
     /// `Dictionary(uniqueKeysWithValues:)` would crash there).
@@ -170,7 +177,15 @@ public enum Detector {
                 return t.portType
             }
         }
-        return (transports.first(where: { $0.active }) ?? transports.first)?.portType
+        return transports.first(where: { $0.active })?.portType
+    }
+
+    /// IOKit properties are sometimes present-but-empty right after
+    /// unplug; treat "" as missing so titles and keys never render
+    /// ghosts like " (HDMI)".
+    static func nonEmpty(_ value: String?) -> String? {
+        guard let v = value, !v.isEmpty else { return nil }
+        return v
     }
 
     // MARK: - Helpers
