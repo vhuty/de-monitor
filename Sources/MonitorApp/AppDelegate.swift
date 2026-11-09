@@ -195,10 +195,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
             NSLog("de-monitor: snapshot for %@ unchanged, skipping write", key)
             return
         }
+        // Notify only for a brand-new port/monitor; silent updates when
+        // the user rearranges an already-known setup.
+        let isNewPort = setups[key] == nil
         setups[key] = profile
         do {
             try ProfileStore.save(setups)
             NSLog("de-monitor: snapshot saved for %@: internal (%d,%d)", key, Int(origin.x), Int(origin.y))
+            if isNewPort {
+                let display = signal.productName ?? "external display"
+                notify(title: "De monitor",
+                       body: "New display setup saved for \(display)",
+                       id: "de-monitor.saved")
+            }
         } catch {
             NSLog("de-monitor: snapshot save failed: %@", String(describing: error))
         }
@@ -302,15 +311,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
         do {
             try ProfileStore.save(setups)
             NSLog("de-monitor: configuration reset for %@", signal.key)
-            notifyConfigurationReset()
+            notify(title: "De monitor",
+                   body: "Display configuration has been reset",
+                   id: "de-monitor.reset")
         } catch {
             NSLog("de-monitor: reset save failed: %@", String(describing: error))
         }
         rebuildMenu(signal: signal)
     }
 
-    private func notifyConfigurationReset() {
-        // Authorization is requested lazily on first reset only; the
+    private func notify(title: String, body: String, id: String) {
+        // Authorization is requested lazily on first notice only; the
         // system prompts once, later calls just report the stored status.
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, error in
@@ -323,10 +334,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {    private var status
                 return
             }
             let content = UNMutableNotificationContent()
-            content.title = "De monitor"
-            content.body = "Display configuration has been reset"
+            content.title = title
+            content.body = body
             let request = UNNotificationRequest(
-                identifier: "de-monitor.reset", content: content, trigger: nil)
+                identifier: id, content: content, trigger: nil)
             center.add(request) { error in
                 if let error {
                     NSLog("de-monitor: failed to post reset notice: %@", String(describing: error))
